@@ -1,0 +1,33 @@
+{
+  "total_lines_read": 2923,
+  "cleaned_records_count": 2839,
+  "quarantined_records_count": 84,
+  "quarantine_breakdown": {
+    "Missing / Invalid Level": 18,
+    "Invalid Timestamp": 20,
+    "Malformed JSON": 18,
+    "Duplicate Record": 28
+  },
+  "service_distribution": {
+    "notification-worker": 529,
+    "auth-service": 538,
+    "payment-api": 650,
+    "batch-report": 534,
+    "web-portal": 588
+  },
+  "level_distribution": {
+    "ERROR": 287,
+    "INFO": 2249,
+    "WARN": 303
+  },
+  "date_distribution": {
+    "2026-07-27": 399,
+    "2026-07-28": 379,
+    "2026-07-29": 385,
+    "2026-07-30": 511,
+    "2026-07-31": 383,
+    "2026-08-01": 390,
+    "2026-08-02": 392
+  },
+  "execution_time_seconds": 0.195
+}
