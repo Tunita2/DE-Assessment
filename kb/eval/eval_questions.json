@@ -1,0 +1,12 @@
+[
+  {
+    "id": "Q01",
+    "question": "Câu hỏi kiểm chứng 1",
+    "source_doc": "data/docs/doc_name.md",
+    "expected_answer": "Đáp án chuẩn mong đợi từ tài liệu nguồn",
+    "evaluation_criteria": {
+      "pass": "Trả lời đầy đủ các ý chính...",
+      "fail": "Bỏ sót thông tin hoặc trả lời sai quy trình..."
+    }
+  }
+]
