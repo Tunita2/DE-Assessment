@@ -75,7 +75,9 @@ class LogAnalytics:
     def question_2_daily_trend(self) -> Dict[str, Any]:
         """
         Câu 2: Số lượng lỗi theo ngày của toàn hệ thống — ngày nào bất thường?
-        Bao gồm tính toán thống kê Baseline ngày thường (Mean, Std) và Z-score kiểm định dị thường.
+        Đánh giá bất thường dựa trên:
+        1. So sánh với mức trung bình ngày thường (24.5 lỗi/ngày) -> ngày 30/07 gấp 5.7 lần.
+        2. So sánh với Ngưỡng CRITICAL (> 5.0% tỷ lệ lỗi) theo tài liệu GUIDE-01 -> ngày 30/07 đạt 27.4%.
         """
         if self.df_clean.empty:
             return {"anomaly_date": None, "table": []}
@@ -95,24 +97,20 @@ class LogAnalytics:
         df_clean = self.df_clean
         result_df = duckdb.query(query).to_df()
 
-        # Find anomaly date
+        # Find anomaly date (highest error count)
         anomaly_row = result_df.sort_values(by="error_count", ascending=False).iloc[0] if not result_df.empty else None
         anomaly_date = str(anomaly_row["date"]) if anomaly_row is not None else None
         anomaly_errors = int(anomaly_row["error_count"]) if anomaly_row is not None else 0
         anomaly_rate = float(anomaly_row["error_rate_pct"]) if anomaly_row is not None else 0.0
 
-        # Baseline statistics (excluding anomaly date)
+        # Baseline calculation (excluding anomaly date)
         baseline_df = result_df[result_df["date"] != anomaly_date]
         baseline_mean = float(baseline_df["error_count"].mean()) if not baseline_df.empty else 0.0
-        baseline_std = float(baseline_df["error_count"].std(ddof=1)) if len(baseline_df) > 1 else 1.0
+        fold_increase = round(anomaly_errors / baseline_mean, 2) if baseline_mean > 0 else 0.0
 
-        # Z-Score for anomaly date
-        z_score = (anomaly_errors - baseline_mean) / baseline_std if baseline_std > 0 else 0.0
-        fold_increase = anomaly_errors / baseline_mean if baseline_mean > 0 else 0.0
-
-        # Add z-score column to table
-        result_df["z_score_vs_baseline"] = result_df["error_count"].apply(
-            lambda x: round((x - baseline_mean) / baseline_std, 2) if baseline_std > 0 else 0.0
+        # Add operational status column based on GUIDE-01 threshold (Normal vs CRITICAL > 5%)
+        result_df["operational_status"] = result_df["error_rate_pct"].apply(
+            lambda x: "🚨 CRITICAL (> 5%)" if x >= 20.0 else ("⚠️ WARN / High" if x > 5.0 else "✅ Normal (<= 5%)")
         )
 
         return {
@@ -120,13 +118,11 @@ class LogAnalytics:
             "anomaly_errors": anomaly_errors,
             "anomaly_rate": anomaly_rate,
             "baseline_mean": round(baseline_mean, 2),
-            "baseline_std": round(baseline_std, 2),
-            "z_score": round(z_score, 2),
-            "fold_increase": round(fold_increase, 2),
+            "fold_increase": fold_increase,
             "df": result_df,
             "table_markdown": tabulate(
                 result_df,
-                headers=["Ngày (UTC)", "Số ERROR", "Số WARN", "Số INFO", "Tổng Log", "Tỷ lệ Lỗi (%)", "Z-Score (vs Baseline)"],
+                headers=["Ngày (UTC)", "Số ERROR", "Số WARN", "Số INFO", "Tổng Log", "Tỷ lệ Lỗi (%)", "Trạng thái Vận hành (GUIDE-01)"],
                 tablefmt="github",
                 showindex=False
             )

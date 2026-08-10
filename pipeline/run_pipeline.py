@@ -87,9 +87,9 @@ def run_pipeline(
     print(f"   → Tỷ lệ lỗi riêng của service: **{q1_res['top_error_rate']}%** (so với mức trung bình ~6.6% của 4 service còn lại)")
     print(q1_res["table_markdown"])
 
-    print("\n▶ Câu 2: Xu hướng lỗi theo ngày & Kiểm định dị thường:")
+    print("\n▶ Câu 2: Xu hướng lỗi theo ngày & Ngày bất thường:")
     print(f"   → Ngày bất thường: **{q2_res['anomaly_date']}** với **{q2_res['anomaly_errors']} ERRORs** (tỷ lệ lỗi **{q2_res['anomaly_rate']}%**)")
-    print(f"   → Kiểm định thống kê: Baseline ngày thường = {q2_res['baseline_mean']} ± {q2_res['baseline_std']} | Z-Score = +{q2_res['z_score']}σ (gấp {q2_res['fold_increase']} lần)")
+    print(f"   → Đối chiếu vận hành: Gấp **{q2_res['fold_increase']} lần** mức trung bình ngày thường ({q2_res['baseline_mean']} lỗi/ngày), vượt xa ngưỡng CRITICAL 5% của GUIDE-01")
     print(q2_res["table_markdown"])
 
     print("\n▶ Câu 3: Top 3 loại lỗi phổ biến nhất:")
@@ -147,7 +147,7 @@ def generate_markdown_report(
 
 1. **Tổng lượng log xử lý**: **{q4_res['total_raw_lines']:,}** dòng log thô. Sau khi làm sạch, chuẩn hóa múi giờ UTC và khử trùng lặp theo cơ chế Whitelist (Fail-Closed), thu được **{q4_res['total_clean']:,}** bản ghi sạch ({100 - q4_res['quarantine_pct']:.1f}%) và cách ly **{q4_res['total_quarantined']}** bản ghi lỗi ({q4_res['quarantine_pct']}%) vào `quarantine_logs.jsonl`.
 2. **Hệ thống bất ổn nhất**: **`payment-api`** chiếm tới **{q1_res['top_errors']} lỗi ERROR** (tương đương **{q1_res['top_errors']/q1_res['total_errors']*100:.1f}%** tổng số lỗi toàn hệ thống, tỷ lệ lỗi nội tại đạt **{q1_res['top_error_rate']}%** — gấp hơn 3.2 lần mức bình thường).
-3. **Ngày xảy ra sự cố nghiêm trọng (Spike Anomaly)**: Ngày **{q2_res['anomaly_date']}** ghi nhận **{q2_res['anomaly_errors']} lỗi ERROR**, tỷ lệ lỗi vọt lên **{q2_res['anomaly_rate']}%** (gấp **{q2_res['fold_increase']} lần** mức trung bình ngày thường, kiểm định độ lệch chuẩn **Z-Score = +{q2_res['z_score']}σ**, vượt xa ngưỡng CRITICAL 5.0% theo quy định tại `GUIDE-01`).
+3. **Ngày xảy ra sự cố nghiêm trọng (Spike Anomaly)**: Ngày **{q2_res['anomaly_date']}** ghi nhận **{q2_res['anomaly_errors']} lỗi ERROR**, tỷ lệ lỗi vọt lên **{q2_res['anomaly_rate']}%** (gấp **{q2_res['fold_increase']} lần** mức trung bình ngày thường, vượt xa ngưỡng CRITICAL 5.0% theo quy định tại `GUIDE-01`).
 4. **Nguyên nhân gốc rễ (Root Cause)**: Do hiện tượng nghẽn kết nối database chính (`ERR ConnTimeout db-primary after 30s retry=3`) tại `payment-api`, dẫn đến phản ứng dây chuyền làm sập cổng giao tiếp trên `web-portal` (`ERR HTTP 502 upstream=payment-api`).
 5. **Kiểm chứng độc lập (Dual Verification)**: Toàn bộ số liệu đã được đối chiếu chéo độc lập giữa **Pandas Engine** và **DuckDB SQL Engine** với độ chính xác khớp **100%**.
 
@@ -171,9 +171,9 @@ Hệ thống **`payment-api`** là dịch vụ có số lượng lỗi nhiều n
 ## 📊 Câu hỏi 2: Số lượng lỗi theo ngày của toàn hệ thống — ngày nào bất thường?
 
 ### Kết luận
-Toàn bộ hệ thống hoạt động tương đối ổn định trong 6 ngày thường (dao động 17–31 lỗi/ngày, tỷ lệ 4.4%–7.9%). Tuy nhiên, ngày **{q2_res['anomaly_date']}** xảy ra **bất thường nghiêm trọng (Anomaly Spike)** với **{q2_res['anomaly_errors']} lỗi ERROR**, chiếm tỷ lệ **{q2_res['anomaly_rate']}%** tổng lượng log trong ngày.
+Toàn bộ hệ thống hoạt động tương đối ổn định trong 6 ngày thường (dao động 17–31 lỗi/ngày, trung bình **{q2_res['baseline_mean']} lỗi/ngày**, tỷ lệ 4.4%–7.9%). Tuy nhiên, ngày **{q2_res['anomaly_date']}** xảy ra **bất thường nghiêm trọng (Anomaly Spike)** với **{q2_res['anomaly_errors']} lỗi ERROR**, chiếm tỷ lệ **{q2_res['anomaly_rate']}%** tổng lượng log trong ngày (gấp **{q2_res['fold_increase']} lần** mức trung bình ngày thường).
 
-### Bảng thống kê số lượng lỗi theo ngày & Kiểm định Z-Score
+### Bảng thống kê số lượng lỗi theo ngày & Đối chiếu ngưỡng GUIDE-01
 {q2_res['table_markdown']}
 
 ### Biểu đồ Xu hướng Lỗi (ASCII Error Trend)
@@ -181,16 +181,14 @@ Toàn bộ hệ thống hoạt động tương đối ổn định trong 6 ngày
 2026-07-27 [ 19 ERRORs] ██ (4.76%)
 2026-07-28 [ 27 ERRORs] ███ (7.12%)
 2026-07-29 [ 29 ERRORs] ███ (7.53%)
-2026-07-30 [140 ERRORs] ████████████████████████████████ (27.40%)  <-- 🚨 CRITICAL SPIKE (Z = +{q2_res['z_score']}σ)
+2026-07-30 [140 ERRORs] ████████████████████████████████ (27.40%)  <-- 🚨 CRITICAL SPIKE (Gấp {q2_res['fold_increase']} lần ngày thường)
 2026-07-31 [ 17 ERRORs] █ (4.44%)
 2026-08-01 [ 24 ERRORs] ██ (6.15%)
 2026-08-02 [ 31 ERRORs] ███ (7.91%)
 ```
 
-### Chứng minh Đột biến bằng Thống kê & Ngưỡng Vận hành:
-1. **Kiểm định Thống kê (Statistical Outlier)**:
-   - Baseline 6 ngày thường có số lỗi trung bình $\mu = {q2_res['baseline_mean']}$ lỗi/ngày, độ lệch chuẩn $\sigma = {q2_res['baseline_std']}$.
-   - Ngày 30/07 đạt 140 lỗi $\rightarrow$ Độ lệch chuẩn **$Z = +{q2_res['z_score']}\sigma$** (vượt xa ngưỡng $3\sigma$, xác suất ngẫu nhiên $p < 0.001$).
+### Đánh giá mức độ bất thường & Đối chiếu Tài liệu Vận hành:
+1. **So sánh với ngày thường**: 6 ngày còn lại chỉ có trung bình **{q2_res['baseline_mean']} lỗi/ngày**. Ngày 30/07 tăng vọt lên 140 lỗi $\rightarrow$ **Gấp {q2_res['fold_increase']} lần**.
 2. **Đối chiếu Ngưỡng Vận hành (GUIDE-01 & SOP-02)**:
    - Theo **GUIDE-01**: Tỷ lệ ERROR > 5.0% là ngưỡng **CRITICAL**. Ngày 30/07 tỷ lệ lỗi đạt **{q2_res['anomaly_rate']}%** (gấp hơn 5.4 lần ngưỡng báo động đỏ).
    - Theo **SOP-02**: Đây là sự cố mức **P1 (Critical Outage)** vì cổng thanh toán và giao dịch bị ngưng trệ, yêu cầu thời hạn phản ứng 15 phút và lập biên bản Post-mortem trong 3 ngày làm việc.

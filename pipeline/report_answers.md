@@ -11,7 +11,7 @@
 
 1. **Tổng lượng log xử lý**: **2,923** dòng log thô. Sau khi làm sạch, chuẩn hóa múi giờ UTC và khử trùng lặp theo cơ chế Whitelist (Fail-Closed), thu được **2,839** bản ghi sạch (97.1%) và cách ly **84** bản ghi lỗi (2.87%) vào `quarantine_logs.jsonl`.
 2. **Hệ thống bất ổn nhất**: **`payment-api`** chiếm tới **139 lỗi ERROR** (tương đương **48.4%** tổng số lỗi toàn hệ thống, tỷ lệ lỗi nội tại đạt **21.38%** — gấp hơn 3.2 lần mức bình thường).
-3. **Ngày xảy ra sự cố nghiêm trọng (Spike Anomaly)**: Ngày **2026-07-30** ghi nhận **140 lỗi ERROR**, tỷ lệ lỗi vọt lên **27.4%** (gấp **5.71 lần** mức trung bình ngày thường, kiểm định độ lệch chuẩn **Z-Score = +20.71σ**, vượt xa ngưỡng CRITICAL 5.0% theo quy định tại `GUIDE-01`).
+3. **Ngày xảy ra sự cố nghiêm trọng (Spike Anomaly)**: Ngày **2026-07-30** ghi nhận **140 lỗi ERROR**, tỷ lệ lỗi vọt lên **27.4%** (gấp **5.71 lần** mức trung bình ngày thường, vượt xa ngưỡng CRITICAL 5.0% theo quy định tại `GUIDE-01`).
 4. **Nguyên nhân gốc rễ (Root Cause)**: Do hiện tượng nghẽn kết nối database chính (`ERR ConnTimeout db-primary after 30s retry=3`) tại `payment-api`, dẫn đến phản ứng dây chuyền làm sập cổng giao tiếp trên `web-portal` (`ERR HTTP 502 upstream=payment-api`).
 5. **Kiểm chứng độc lập (Dual Verification)**: Toàn bộ số liệu đã được đối chiếu chéo độc lập giữa **Pandas Engine** và **DuckDB SQL Engine** với độ chính xác khớp **100%**.
 
@@ -41,34 +41,32 @@ Hệ thống **`payment-api`** là dịch vụ có số lượng lỗi nhiều n
 ## 📊 Câu hỏi 2: Số lượng lỗi theo ngày của toàn hệ thống — ngày nào bất thường?
 
 ### Kết luận
-Toàn bộ hệ thống hoạt động tương đối ổn định trong 6 ngày thường (dao động 17–31 lỗi/ngày, tỷ lệ 4.4%–7.9%). Tuy nhiên, ngày **2026-07-30** xảy ra **bất thường nghiêm trọng (Anomaly Spike)** với **140 lỗi ERROR**, chiếm tỷ lệ **27.4%** tổng lượng log trong ngày.
+Toàn bộ hệ thống hoạt động tương đối ổn định trong 6 ngày thường (dao động 17–31 lỗi/ngày, trung bình **24.5 lỗi/ngày**, tỷ lệ 4.4%–7.9%). Tuy nhiên, ngày **2026-07-30** xảy ra **bất thường nghiêm trọng (Anomaly Spike)** với **140 lỗi ERROR**, chiếm tỷ lệ **27.4%** tổng lượng log trong ngày (gấp **5.71 lần** mức trung bình ngày thường).
 
-### Bảng thống kê số lượng lỗi theo ngày & Kiểm định Z-Score
-| Ngày (UTC)   |   Số ERROR |   Số WARN |   Số INFO |   Tổng Log |   Tỷ lệ Lỗi (%) |   Z-Score (vs Baseline) |
-|--------------|------------|-----------|-----------|------------|-----------------|-------------------------|
-| 2026-07-27   |         19 |        45 |       335 |        399 |            4.76 |                   -0.99 |
-| 2026-07-28   |         27 |        47 |       305 |        379 |            7.12 |                    0.45 |
-| 2026-07-29   |         29 |        36 |       320 |        385 |            7.53 |                    0.81 |
-| 2026-07-30   |        140 |        46 |       325 |        511 |           27.4  |                   20.71 |
-| 2026-07-31   |         17 |        46 |       320 |        383 |            4.44 |                   -1.34 |
-| 2026-08-01   |         24 |        38 |       328 |        390 |            6.15 |                   -0.09 |
-| 2026-08-02   |         31 |        45 |       316 |        392 |            7.91 |                    1.17 |
+### Bảng thống kê số lượng lỗi theo ngày & Đối chiếu ngưỡng GUIDE-01
+| Ngày (UTC)   |   Số ERROR |   Số WARN |   Số INFO |   Tổng Log |   Tỷ lệ Lỗi (%) | Trạng thái Vận hành (GUIDE-01)   |
+|--------------|------------|-----------|-----------|------------|-----------------|----------------------------------|
+| 2026-07-27   |         19 |        45 |       335 |        399 |            4.76 | ✅ Normal (<= 5%)                |
+| 2026-07-28   |         27 |        47 |       305 |        379 |            7.12 | ⚠️ WARN / High                   |
+| 2026-07-29   |         29 |        36 |       320 |        385 |            7.53 | ⚠️ WARN / High                   |
+| 2026-07-30   |        140 |        46 |       325 |        511 |           27.4  | 🚨 CRITICAL (> 5%)               |
+| 2026-07-31   |         17 |        46 |       320 |        383 |            4.44 | ✅ Normal (<= 5%)                |
+| 2026-08-01   |         24 |        38 |       328 |        390 |            6.15 | ⚠️ WARN / High                   |
+| 2026-08-02   |         31 |        45 |       316 |        392 |            7.91 | ⚠️ WARN / High                   |
 
 ### Biểu đồ Xu hướng Lỗi (ASCII Error Trend)
 ```
 2026-07-27 [ 19 ERRORs] ██ (4.76%)
 2026-07-28 [ 27 ERRORs] ███ (7.12%)
 2026-07-29 [ 29 ERRORs] ███ (7.53%)
-2026-07-30 [140 ERRORs] ████████████████████████████████ (27.40%)  <-- 🚨 CRITICAL SPIKE (Z = +20.71σ)
+2026-07-30 [140 ERRORs] ████████████████████████████████ (27.40%)  <-- 🚨 CRITICAL SPIKE (Gấp 5.71 lần ngày thường)
 2026-07-31 [ 17 ERRORs] █ (4.44%)
 2026-08-01 [ 24 ERRORs] ██ (6.15%)
 2026-08-02 [ 31 ERRORs] ███ (7.91%)
 ```
 
-### Chứng minh Đột biến bằng Thống kê & Ngưỡng Vận hành:
-1. **Kiểm định Thống kê (Statistical Outlier)**:
-   - Baseline 6 ngày thường có số lỗi trung bình $\mu = 24.5$ lỗi/ngày, độ lệch chuẩn $\sigma = 5.58$.
-   - Ngày 30/07 đạt 140 lỗi $\rightarrow$ Độ lệch chuẩn **$Z = +20.71\sigma$** (vượt xa ngưỡng $3\sigma$, xác suất ngẫu nhiên $p < 0.001$).
+### Đánh giá mức độ bất thường & Đối chiếu Tài liệu Vận hành:
+1. **So sánh với ngày thường**: 6 ngày còn lại chỉ có trung bình **24.5 lỗi/ngày**. Ngày 30/07 tăng vọt lên 140 lỗi $\rightarrow$ **Gấp 5.71 lần**.
 2. **Đối chiếu Ngưỡng Vận hành (GUIDE-01 & SOP-02)**:
    - Theo **GUIDE-01**: Tỷ lệ ERROR > 5.0% là ngưỡng **CRITICAL**. Ngày 30/07 tỷ lệ lỗi đạt **27.4%** (gấp hơn 5.4 lần ngưỡng báo động đỏ).
    - Theo **SOP-02**: Đây là sự cố mức **P1 (Critical Outage)** vì cổng thanh toán và giao dịch bị ngưng trệ, yêu cầu thời hạn phản ứng 15 phút và lập biên bản Post-mortem trong 3 ngày làm việc.
@@ -117,8 +115,8 @@ Top 3 loại lỗi phổ biến nhất chiếm **192 / 287 (66.9%)** toàn bộ 
 |-------------------------|------------|------------------------------|-------------------------------------------------------|
 | Duplicate Record        |         28 |                        33.33 | Loại bỏ bản ghi trùng lặp (Deduplication)             |
 | Invalid Timestamp       |         20 |                        23.81 | Loại bỏ (giá trị không thể parse thành mốc thời gian) |
-| Malformed JSON          |         18 |                        21.43 | Loại bỏ (dòng log bị cắt cụt / lỗi cú pháp JSON)      |
 | Missing / Invalid Level |         18 |                        21.43 | Loại bỏ (trường level bị null/thiếu)                  |
+| Malformed JSON          |         18 |                        21.43 | Loại bỏ (dòng log bị cắt cụt / lỗi cú pháp JSON)      |
 
 ### Giải trình Lý do & Quyết định Kỹ thuật (Technical Decisions):
 
