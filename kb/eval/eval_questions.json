@@ -1,12 +1,92 @@
 [
   {
-    "id": "Q01",
-    "question": "Câu hỏi kiểm chứng 1",
-    "source_doc": "data/docs/doc_name.md",
-    "expected_answer": "Đáp án chuẩn mong đợi từ tài liệu nguồn",
-    "evaluation_criteria": {
-      "pass": "Trả lời đầy đủ các ý chính...",
-      "fail": "Bỏ sót thông tin hoặc trả lời sai quy trình..."
-    }
+    "id": "EVAL-01",
+    "category": "DIRECT_LOOKUP",
+    "question": "Chính sách đổi mật khẩu hệ thống quy định bao lâu phải đổi một lần và khi nào bắt buộc xác thực 2 lớp?",
+    "expected_answer": "Mật khẩu đổi mỗi 90 ngày; bắt buộc xác thực 2 lớp (2FA) khi truy cập từ ngoài mạng nội bộ.",
+    "expected_doc_ids": ["POL-02"],
+    "expected_section_hints": ["Quy định chung", "sec_01"],
+    "groundedness_criteria": "Nêu đúng 90 ngày và 2FA từ ngoài mạng nội bộ; trích dẫn nguồn POL-02."
+  },
+  {
+    "id": "EVAL-02",
+    "category": "DIRECT_LOOKUP",
+    "question": "Tài khoản không hoạt động bao lâu sẽ bị khoá tự động và nhân viên nghỉ việc bị khoá tài khoản khi nào?",
+    "expected_answer": "Tài khoản không hoạt động 30 ngày bị khoá tự động; nhân viên nghỉ việc bị khoá toàn bộ tài khoản trong ngày làm việc cuối cùng.",
+    "expected_doc_ids": ["POL-02"],
+    "expected_section_hints": ["Quy định chung", "sec_01"],
+    "groundedness_criteria": "Nêu đúng 30 ngày và ngày làm việc cuối cùng; trích dẫn nguồn POL-02."
+  },
+  {
+    "id": "EVAL-03",
+    "category": "DIRECT_LOOKUP",
+    "question": "Lịch chạy của job báo cáo batch-report là vào mấy giờ và phụ thuộc dữ liệu từ những dịch vụ nào?",
+    "expected_answer": "Job batch-report chạy 23:00 hằng ngày, phụ thuộc dữ liệu từ payment-api (bảng giao dịch) và auth-service (bảng phiên đăng nhập).",
+    "expected_doc_ids": ["RUN-01"],
+    "expected_section_hints": ["Lịch chạy", "sec_01"],
+    "groundedness_criteria": "Nêu đúng 23:00 hằng ngày và 2 dịch vụ payment-api, auth-service; trích dẫn nguồn RUN-01."
+  },
+  {
+    "id": "EVAL-04",
+    "category": "DIRECT_LOOKUP",
+    "question": "Ngưỡng tỷ lệ ERROR bao nhiêu phần trăm thì hệ thống kích hoạt cảnh báo CRITICAL theo tài liệu giám sát?",
+    "expected_answer": "Tỉ lệ ERROR / tổng log (15 phút) > 5% là ngưỡng CRITICAL (> 2% là WARN).",
+    "expected_doc_ids": ["GUIDE-01"],
+    "expected_section_hints": ["Ngưỡng cảnh báo hiện hành", "sec_02"],
+    "groundedness_criteria": "Nêu đúng ngưỡng > 5% cho CRITICAL và > 2% cho WARN; trích dẫn nguồn GUIDE-01."
+  },
+  {
+    "id": "EVAL-05",
+    "category": "VERSION_TRAP",
+    "question": "Chính sách sao lưu (backup) cơ sở dữ liệu quy định thời gian chạy, thời gian lưu giữ, địa điểm lưu trữ và thẩm quyền khôi phục như thế nào?",
+    "expected_answer": "Theo POL-01 v2.0 (ban hành 05/2026 đang hiệu lực): Sao lưu lúc 23:30, lưu giữ 30 ngày, lưu trữ trên Cloud mã hoá, khôi phục phải có phê duyệt của Trưởng phòng Vận hành. (Không áp dụng quy định cũ 22:00, 7 ngày, phòng 3 của v1).",
+    "expected_doc_ids": ["POL-01"],
+    "expected_section_hints": ["Quy định", "sec_01"],
+    "groundedness_criteria": "BẮT BUỘC trả lời đúng 23:30, 30 ngày, cloud mã hoá, phê duyệt Trưởng phòng Vận hành theo POL-01 v2; TUYỆT ĐỐI KHÔNG trích dẫn bản v1 cũ (22:00 / 7 ngày)."
+  },
+  {
+    "id": "EVAL-06",
+    "category": "MULTI_SOURCE",
+    "question": "Khi payment-api gặp sự cố lỗi DB ConnTimeout, đội vận hành có được restart ngay không, lưu ý gì về queue, và nếu tỷ lệ lỗi vượt quá 5% thì phân loại sự cố mức mấy?",
+    "expected_answer": "Không được tự ý restart ngay (tránh bão kết nối); nếu phải restart bắt buộc kiểm tra queue = 0 (tránh lệch số dư); tỷ lệ lỗi > 5% phân loại là sự cố P1 (Critical) với thời hạn phản ứng 15 phút.",
+    "expected_doc_ids": ["FAQ-01", "SOP-01", "SOP-02", "GUIDE-01"],
+    "expected_section_hints": ["ERR ConnTimeout", "Quy trình chuẩn", "Phân mức sự cố"],
+    "groundedness_criteria": "Tổng hợp chính xác: không restart ồ ạt (FAQ-01/SOP-01), queue = 0 (SOP-01), sự cố P1 phản ứng 15 phút (SOP-02/GUIDE-01)."
+  },
+  {
+    "id": "EVAL-07",
+    "category": "MULTI_SOURCE",
+    "question": "Khi job batch-report bị lỗi ERR NullPointer in ReportBuilder, nguyên nhân do đâu và quy trình khắc phục như thế nào?",
+    "expected_answer": "Nguyên nhân do hụt dữ liệu giao dịch từ payment-api trong ngày; xử lý: chờ dữ liệu được bổ sung hoàn tất rồi mới chạy lại job bằng lệnh rerun theo ngày (job tự xoá kết quả cũ trước khi tính lại).",
+    "expected_doc_ids": ["FAQ-01", "RUN-01"],
+    "expected_section_hints": ["ERR NullPointer in ReportBuilder", "Khi job lỗi"],
+    "groundedness_criteria": "Nêu đúng nguyên nhân thiếu dữ liệu đầu vào và quy trình chờ bù dữ liệu trước khi rerun theo ngày (RUN-01, FAQ-01)."
+  },
+  {
+    "id": "EVAL-08",
+    "category": "OVERVIEW",
+    "question": "Hệ thống đã từng ghi nhận những loại lỗi thường gặp nào và cách xử lý sơ bộ của từng loại?",
+    "expected_answer": "Hệ thống có 5 loại lỗi thường gặp theo FAQ-01: 1. ERR ConnTimeout (quá tải DB, kiểm tra pool, liên hệ DBA), 2. ERR AuthTokenExpired (hết hạn phiên đăng nhập), 3. ERR HTTP 502 (web-portal hụt upstream payment-api), 4. ERR NullPointer (batch-report thiếu dữ liệu), 5. ERR SMTPConnRefused (lỗi mail-gw, thư nằm lại queue).",
+    "expected_doc_ids": ["FAQ-01"],
+    "expected_section_hints": ["header", "sec_01", "sec_02", "sec_03", "sec_04", "sec_05"],
+    "groundedness_criteria": "Liệt kê đầy đủ 5 nhóm lỗi trong FAQ-01 kèm tóm tắt nguyên nhân/xử lý; trích dẫn nguồn FAQ-01."
+  },
+  {
+    "id": "EVAL-09",
+    "category": "OUT_OF_SCOPE",
+    "question": "Công ty có chính sách hỗ trợ tiền ăn trưa hoặc phụ cấp làm thêm giờ cho nhân viên trực ca đêm không?",
+    "expected_answer": "Không có thông tin trong tài liệu vận hành và chính sách hiện hành.",
+    "expected_doc_ids": [],
+    "expected_section_hints": [],
+    "groundedness_criteria": "BẮT BUỘC từ chối trả lời vì không có thông tin trong tài liệu; TUYỆT ĐỐI KHÔNG bịa đặt thông tin chế độ đãi ngộ."
+  },
+  {
+    "id": "EVAL-10",
+    "category": "OUT_OF_SCOPE",
+    "question": "Hướng dẫn quy trình xin nghỉ phép năm và thủ tục thanh toán công tác phí cho nhân viên IT?",
+    "expected_answer": "Không có thông tin trong tài liệu vận hành và chính sách hiện hành.",
+    "expected_doc_ids": [],
+    "expected_section_hints": [],
+    "groundedness_criteria": "BẮT BUỘC từ chối trả lời vì ngoài phạm vi tài liệu kỹ thuật; TUYỆT ĐỐI KHÔNG tự tạo quy trình nhân sự."
   }
 ]
