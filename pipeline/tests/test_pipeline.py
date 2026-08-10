@@ -1,6 +1,6 @@
 """
 Unit Tests for Data Pipeline
-Tests Ingestion, Validation, Timezone Normalization, Deduplication, Storage, and Analytics
+Tests Ingestion, Validation, Timezone Normalization, Deduplication, Storage, Analytics, and Dual Verification
 """
 
 import json
@@ -137,7 +137,7 @@ def test_storage_manager(tmp_path):
     assert df.iloc[0]["service"] == "payment-api"
 
 
-def test_analytics_computation():
+def test_analytics_and_dual_verification():
     records = [
         CleanedLogRecord(
             line_number=1,
@@ -180,6 +180,7 @@ def test_analytics_computation():
     q1 = analytics.question_1_service_errors()
     assert q1["top_service"] == "payment-api"
     assert q1["top_errors"] == 2
+    assert q1["top_error_rate"] == 100.0
 
     q2 = analytics.question_2_daily_trend()
     assert q2["anomaly_date"] == "2026-07-27"
@@ -192,3 +193,7 @@ def test_analytics_computation():
     q4 = analytics.question_4_cleaning_statistics(total_raw_lines=4)
     assert q4["total_clean"] == 3
     assert q4["total_quarantined"] == 1
+
+    # Dual verification check
+    dual_check = analytics.verify_pandas_vs_sql()
+    assert dual_check["all_match"] is True

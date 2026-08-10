@@ -1,11 +1,13 @@
 """
 Analytics & Reporting Module
 Answers the 4 customer business questions using Pandas and DuckDB SQL
+Includes Statistical Anomaly Detection (Z-Score) and Dual Verification (Pandas vs SQL)
 """
 
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Tuple
 import pandas as pd
 import duckdb
+import numpy as np
 from tabulate import tabulate
 
 from pipeline.src.models import CleanedLogRecord, QuarantineRecord
@@ -23,38 +25,57 @@ class LogAnalytics:
     def question_1_service_errors(self) -> Dict[str, Any]:
         """
         Câu 1: Service nào có nhiều lỗi (level=ERROR) nhất trong 7 ngày?
+        Tính toán cả Absolute Count, Share of Total Errors, và Service Error Rate (ERROR / Total Logs).
         """
         if self.df_clean.empty:
             return {"top_service": None, "table": [], "total_errors": 0}
 
         query = """
+        WITH srv_totals AS (
+            SELECT 
+                service,
+                COUNT(*) AS total_logs,
+                SUM(CASE WHEN level = 'ERROR' THEN 1 ELSE 0 END) AS error_count,
+                SUM(CASE WHEN level = 'WARN' THEN 1 ELSE 0 END) AS warn_count,
+                SUM(CASE WHEN level = 'INFO' THEN 1 ELSE 0 END) AS info_count
+            FROM df_clean
+            GROUP BY service
+        )
         SELECT 
             service,
-            COUNT(*) AS error_count,
-            ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER(), 2) AS percentage
-        FROM df_clean
-        WHERE level = 'ERROR'
-        GROUP BY service
+            total_logs,
+            error_count,
+            ROUND(error_count * 100.0 / SUM(error_count) OVER(), 2) AS share_of_all_errors_pct,
+            ROUND(error_count * 100.0 / total_logs, 2) AS error_rate_pct
+        FROM srv_totals
         ORDER BY error_count DESC;
         """
         df_clean = self.df_clean
         result_df = duckdb.query(query).to_df()
-        
+
         top_service = result_df.iloc[0]["service"] if not result_df.empty else None
         top_errors = int(result_df.iloc[0]["error_count"]) if not result_df.empty else 0
         total_errors = int(result_df["error_count"].sum()) if not result_df.empty else 0
+        top_error_rate = float(result_df.iloc[0]["error_rate_pct"]) if not result_df.empty else 0.0
 
         return {
             "top_service": top_service,
             "top_errors": top_errors,
             "total_errors": total_errors,
+            "top_error_rate": top_error_rate,
             "df": result_df,
-            "table_markdown": tabulate(result_df, headers=["Service", "Số lỗi (ERROR)", "Tỷ lệ (%)"], tablefmt="github", showindex=False)
+            "table_markdown": tabulate(
+                result_df,
+                headers=["Service", "Tổng Log", "Số lỗi (ERROR)", "Tỷ lệ trong tổng ERROR (%)", "Tỷ lệ lỗi riêng của Service (%)"],
+                tablefmt="github",
+                showindex=False
+            )
         }
 
     def question_2_daily_trend(self) -> Dict[str, Any]:
         """
         Câu 2: Số lượng lỗi theo ngày của toàn hệ thống — ngày nào bất thường?
+        Bao gồm tính toán thống kê Baseline ngày thường (Mean, Std) và Z-score kiểm định dị thường.
         """
         if self.df_clean.empty:
             return {"anomaly_date": None, "table": []}
@@ -74,20 +95,38 @@ class LogAnalytics:
         df_clean = self.df_clean
         result_df = duckdb.query(query).to_df()
 
-        # Find anomaly date (highest error count / rate)
+        # Find anomaly date
         anomaly_row = result_df.sort_values(by="error_count", ascending=False).iloc[0] if not result_df.empty else None
         anomaly_date = str(anomaly_row["date"]) if anomaly_row is not None else None
         anomaly_errors = int(anomaly_row["error_count"]) if anomaly_row is not None else 0
         anomaly_rate = float(anomaly_row["error_rate_pct"]) if anomaly_row is not None else 0.0
 
+        # Baseline statistics (excluding anomaly date)
+        baseline_df = result_df[result_df["date"] != anomaly_date]
+        baseline_mean = float(baseline_df["error_count"].mean()) if not baseline_df.empty else 0.0
+        baseline_std = float(baseline_df["error_count"].std(ddof=1)) if len(baseline_df) > 1 else 1.0
+
+        # Z-Score for anomaly date
+        z_score = (anomaly_errors - baseline_mean) / baseline_std if baseline_std > 0 else 0.0
+        fold_increase = anomaly_errors / baseline_mean if baseline_mean > 0 else 0.0
+
+        # Add z-score column to table
+        result_df["z_score_vs_baseline"] = result_df["error_count"].apply(
+            lambda x: round((x - baseline_mean) / baseline_std, 2) if baseline_std > 0 else 0.0
+        )
+
         return {
             "anomaly_date": anomaly_date,
             "anomaly_errors": anomaly_errors,
             "anomaly_rate": anomaly_rate,
+            "baseline_mean": round(baseline_mean, 2),
+            "baseline_std": round(baseline_std, 2),
+            "z_score": round(z_score, 2),
+            "fold_increase": round(fold_increase, 2),
             "df": result_df,
             "table_markdown": tabulate(
                 result_df,
-                headers=["Ngày (UTC)", "Số ERROR", "Số WARN", "Số INFO", "Tổng Log", "Tỷ lệ Lỗi (%)"],
+                headers=["Ngày (UTC)", "Số ERROR", "Số WARN", "Số INFO", "Tổng Log", "Tỷ lệ Lỗi (%)", "Z-Score (vs Baseline)"],
                 tablefmt="github",
                 showindex=False
             )
@@ -114,11 +153,25 @@ class LogAnalytics:
         """
         df_clean = self.df_clean
         result_df = duckdb.query(query).to_df()
-
         top_3_list = result_df.to_dict(orient="records")
+
+        # Analyze template vs dynamic parameters
+        all_error_patterns = duckdb.query("""
+            SELECT service, message, COUNT(*) as cnt
+            FROM df_clean
+            WHERE level = 'ERROR'
+            GROUP BY service, message
+            ORDER BY cnt DESC
+        """).to_df()
+
+        top_4_static_count = int(all_error_patterns.head(4)["cnt"].sum())
+        total_error_count = int(all_error_patterns["cnt"].sum())
+        static_share_pct = round((top_4_static_count / total_error_count) * 100, 2) if total_error_count > 0 else 0.0
 
         return {
             "top_3": top_3_list,
+            "static_share_pct": static_share_pct,
+            "unique_patterns_count": len(all_error_patterns),
             "df": result_df,
             "table_markdown": tabulate(
                 result_df,
@@ -150,7 +203,6 @@ class LogAnalytics:
             df_quarantine = self.df_quarantine
             breakdown_df = duckdb.query(query).to_df()
 
-        # Add resolution action column
         action_map = {
             "Duplicate Record": "Loại bỏ bản ghi trùng lặp (Deduplication)",
             "Invalid Timestamp": "Loại bỏ (giá trị không thể parse thành mốc thời gian)",
@@ -171,4 +223,36 @@ class LogAnalytics:
                 tablefmt="github",
                 showindex=False
             )
+        }
+
+    def verify_pandas_vs_sql(self) -> Dict[str, bool]:
+        """
+        Dual Verification Engine:
+        Runs equivalent queries in Pandas and DuckDB SQL to verify 100% mathematical consistency.
+        """
+        if self.df_clean.empty:
+            return {"q1_match": True, "q2_match": True, "q3_match": True, "all_match": True}
+
+        df_clean = self.df_clean
+
+        # Q1 Check
+        q1_pandas = df_clean[df_clean['level'] == 'ERROR'].groupby('service', observed=False).size().to_dict()
+        q1_sql = duckdb.query("SELECT service, count(*) as cnt FROM df_clean WHERE level='ERROR' GROUP BY service").df().set_index('service')['cnt'].to_dict()
+        q1_match = (q1_pandas == q1_sql)
+
+        # Q2 Check
+        q2_pandas = df_clean[df_clean['level'] == 'ERROR'].groupby('log_date').size().to_dict()
+        q2_sql = duckdb.query("SELECT log_date, count(*) as cnt FROM df_clean WHERE level='ERROR' GROUP BY log_date").df().set_index('log_date')['cnt'].to_dict()
+        q2_match = (q2_pandas == q2_sql)
+
+        # Q3 Check
+        q3_pandas = df_clean[df_clean['level'] == 'ERROR'].groupby(['service', 'message'], observed=False).size().nlargest(3).tolist()
+        q3_sql = duckdb.query("SELECT count(*) as cnt FROM df_clean WHERE level='ERROR' GROUP BY service, message ORDER BY count(*) DESC LIMIT 3").df()['cnt'].tolist()
+        q3_match = (q3_pandas == q3_sql)
+
+        return {
+            "q1_match": q1_match,
+            "q2_match": q2_match,
+            "q3_match": q3_match,
+            "all_match": (q1_match and q2_match and q3_match)
         }
