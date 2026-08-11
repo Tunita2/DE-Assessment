@@ -23,7 +23,13 @@ Một số điểm cần nêu rõ để người đọc/chấm hiểu đúng m�
   thực sự. Trong ngữ cảnh bài thi này, quy trình đó chưa được vận hành thực tế; đây là tài
   liệu thiết kế/template.
 
-- **Kết quả benchmark 100%** của KB đạt được sau nhiều lần refactor prompt và code retriever —
+- **Task B Câu 3 (đánh giá trên data thật)**: Script `run_task_b_eval.py` được viết để chạy
+  prompt trên 30–100 dòng log ngẫu nhiên từ `clean_logs.db` và tính 3 metrics (JSON validity,
+  schema compliance, hallucination rate). Tuy nhiên **chưa chạy được do hết quota API**:
+  Gemini daily quota cạn sau quá trình debug (~200 requests), TechOpenClaw key giới hạn 10k
+  token không đủ cho batch. Phần này được ghi nhận thiếu trong `task_b_eval_results.md`.
+
+- **Kết quả benchmark KB 100%** đạt được sau nhiều lần refactor prompt và code retriever —
   không phải lần chạy đầu tiên. Quá trình debug được ghi trong worklog.
 
 ---
