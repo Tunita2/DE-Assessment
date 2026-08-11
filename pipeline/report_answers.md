@@ -115,8 +115,8 @@ Top 3 loại lỗi phổ biến nhất chiếm **192 / 287 (66.9%)** toàn bộ 
 |-------------------------|------------|------------------------------|-------------------------------------------------------|
 | Duplicate Record        |         28 |                        33.33 | Loại bỏ bản ghi trùng lặp (Deduplication)             |
 | Invalid Timestamp       |         20 |                        23.81 | Loại bỏ (giá trị không thể parse thành mốc thời gian) |
-| Missing / Invalid Level |         18 |                        21.43 | Loại bỏ (trường level bị null/thiếu)                  |
 | Malformed JSON          |         18 |                        21.43 | Loại bỏ (dòng log bị cắt cụt / lỗi cú pháp JSON)      |
+| Missing / Invalid Level |         18 |                        21.43 | Loại bỏ (trường level bị null/thiếu)                  |
 
 ### Giải trình Lý do & Quyết định Kỹ thuật (Technical Decisions):
 
