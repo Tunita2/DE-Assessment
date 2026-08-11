@@ -1,45 +1,24 @@
-# Task B — Câu 4: Kết Quả 5 Test Case
+# Task B — Câu 4: Kết Quả 5 Test Case Thực Tế
 
-> **Model:** gemini-flash-latest (Google AI) · **Temperature:** 0  
-> **Ngày chạy:** 11/08/2026  
-> **Script:** `ai_proficiency/run_task_b_eval.py` + `scratch/run_5tc.py`
-
----
-
-## Trạng thái thực tế
-
-Quá trình chạy thực tế gặp 2 vấn đề kỹ thuật được ghi nhận trung thực:
-
-**Vấn đề 1 — Model migration:** `gemini-2.0-flash` và `gemini-2.5-flash` đã được
-migrate sang Interactions API mới, không còn dùng được với endpoint
-`generateContent` cũ (HTTP 404). Đã tìm được model còn hoạt động:
-`gemini-flash-latest`.
-
-**Vấn đề 2 — Quota exhausted:** Quá trình debug model (thử nhiều tên model, 3 lần
-chạy 100+ request/lần) đã tiêu hết daily quota của API key trước khi 5 TC thực sự
-được chạy thành công. Mọi lần gọi API sau đó đều trả về HTTP 429 Too Many Requests.
-
-**Điều đã xác nhận hoạt động:**
-- API key hợp lệ, `gemini-flash-latest` phản hồi đúng (test "say hi" thành công).
-- Lần đầu chạy 5 TC, model ĐÃ trả về response (không phải 404) nhưng JSON parse
-  fail vì prompt tiếng Việt có ký tự `//` trong schema description khiến model
-  bao gồm comments không hợp lệ vào output JSON.
-- Fix: chuyển sang English prompt + regex extract `{...}` block → đã sửa đúng về
-  kỹ thuật, nhưng không còn quota để xác nhận.
+> **Model:** claude-sonnet-4-6 (TechOpenClaw proxy) · **Temperature:** 0
+> **Ngày:** 11/08/2026 19:48 · **Script:** `scratch/run_5tc_claude.py`
 
 ---
 
-## Kết Quả Kỳ Vọng (dựa trên thiết kế prompt — chưa xác nhận bằng LLM thực)
-
-> **Lưu ý:** Các output dưới đây là đầu ra kỳ vọng theo thiết kế, không phải output
-> thực tế từ Gemini do quota hết. Script đầy đủ tại `run_task_b_eval.py`.
+**Tổng kết: 1/5 ✅ PASS · 4/5 🔶 PARTIAL · 0/5 🚨 HALLUCINATION**
 
 ---
 
-### TC-01 — Kỳ vọng ✅ PASS
+### TC-01 — 🔶 PARTIAL
 
 **Input:** `ERR ConnTimeout db-primary after 30s retry=3`
 
+**Output từ LLM:**
+```json
+{"event_type": "error", "error_code": "ConnTimeout", "component": "db-primary", "action": "connect", "parameters": {"timeout": "30s", "retry": "3"}, "parse_status": "ok"}
+```
+
+**Expected:**
 ```json
 {
   "event_type": "error",
@@ -51,12 +30,25 @@ chạy 100+ request/lần) đã tiêu hết daily quota của API key trước k
 }
 ```
 
+⚠️ **Field không khớp:** `error_code`, `action`, `parameters`
+
+**Nhận xét:**
+- `error_code`: Model bỏ prefix "ERR", chỉ giữ "ConnTimeout" → prompt chưa chỉ rõ phải giữ toàn bộ chuỗi error code.
+- `action`: "connect" quá ngắn, thiếu ngữ nghĩa so với "connection_timeout" → prompt không định nghĩa độ chi tiết của action.
+- `parameters`: Model thêm `timeout=30s` dù "after 30s" trong message KHÔNG ở dạng `key=value` → đây là **false-negative của hallucination checker** — checker chỉ kiểm tra value ("30s") có trong message không, nhưng key "timeout" là do model suy diễn.
+
 ---
 
-### TC-02 — Kỳ vọng ✅ PASS (kiểm tra chống hallucination)
+### TC-02 — ✅ PASS
 
 **Input:** `Payment processed txn=t419149 amount=990000`
 
+**Output từ LLM:**
+```json
+{"event_type": "info", "error_code": null, "component": null, "action": "payment_processed", "parameters": {"txn": "t419149", "amount": "990000"}, "parse_status": "ok"}
+```
+
+**Expected:**
 ```json
 {
   "event_type": "info",
@@ -68,14 +60,23 @@ chạy 100+ request/lần) đã tiêu hết daily quota của API key trước k
 }
 ```
 
-*Điểm cần kiểm tra: `component` phải là `null` — không được suy diễn "payment-api" từ context ngoài message.*
+✅ Tất cả field khớp, không hallucination.
+
+**Nhận xét quan trọng:** `component = null` — model KHÔNG suy diễn "payment-api" từ context
+bên ngoài message. Quy tắc chống hallucination hoạt động đúng ở TC này.
 
 ---
 
-### TC-03 — Kỳ vọng ✅ PASS (inference từ ngữ nghĩa)
+### TC-03 — 🔶 PARTIAL
 
 **Input:** `Report row mismatch expected=843 got=759`
 
+**Output từ LLM:**
+```json
+{"event_type": "error", "error_code": null, "component": null, "action": "validate_report_row_count", "parameters": {"expected": 843, "got": 759}, "parse_status": "ok"}
+```
+
+**Expected:**
 ```json
 {
   "event_type": "warning",
@@ -87,14 +88,25 @@ chạy 100+ request/lần) đã tiêu hết daily quota của API key trước k
 }
 ```
 
-*Không có prefix WARN/ERR — model phải suy luận `warning` từ ngữ nghĩa "mismatch".*
+⚠️ **Field không khớp:** `event_type`, `action`, `parameters`
+
+**Nhận xét:**
+- `event_type`: Model trả về "error" thay vì "warning" — ngữ nghĩa "mismatch" mang tính cảnh báo (data không nhất quán) nhưng chưa đến mức lỗi nghiêm trọng. Prompt cần ví dụ cụ thể hơn về phân biệt warning vs error.
+- `action`: "validate_report_row_count" quá dài và chi tiết hơn mức cần → cần chỉ định trong prompt "ngắn gọn 2–3 từ".
+- `parameters`: Giá trị `843`, `759` là integer thay vì string → prompt đã ghi "values always string" nhưng model không tuân thủ → cần thêm ví dụ tường minh.
 
 ---
 
-### TC-04 — Kỳ vọng ✅ PASS (ca khó)
+### TC-04 — 🔶 PARTIAL
 
 **Input:** `ERR HTTP 502 upstream=payment-api path=/checkout`
 
+**Output từ LLM:**
+```json
+{"event_type": "error", "error_code": "502", "component": "payment-api", "action": "http_request", "parameters": {"protocol": "HTTP", "upstream": "payment-api", "path": "/checkout"}, "parse_status": "ok"}
+```
+
+**Expected:**
 ```json
 {
   "event_type": "error",
@@ -106,14 +118,26 @@ chạy 100+ request/lần) đã tiêu hết daily quota của API key trước k
 }
 ```
 
-*`error_code` 3-token, `component` và `upstream` cùng giá trị, `path=/checkout` có ký tự đặc biệt.*
+⚠️ **Field không khớp:** `error_code`, `action`, `parameters`
+
+**Nhận xét:**
+- `error_code`: Chỉ lấy "502" thay vì toàn bộ "ERR HTTP 502" → cùng vấn đề TC-01, model tự rút gọn error code.
+- `action`: "http_request" không đủ ngữ nghĩa so với "http_upstream_error".
+- `parameters`: Thêm `protocol=HTTP` dù "HTTP" không ở dạng key=value trong message → **false-negative** của hallucination checker (value "HTTP" có trong message nên không bị flag).
+- **Điểm đáng chú ý:** `component = "payment-api"` đúng — model đọc đúng từ `upstream=payment-api`.
 
 ---
 
-### TC-05 — Kỳ vọng ✅ PASS (ca mơ hồ)
+### TC-05 — 🔶 PARTIAL
 
 **Input:** `Daily report job started`
 
+**Output từ LLM:**
+```json
+{"event_type": "info", "error_code": null, "component": null, "action": "start_daily_report_job", "parameters": {}, "parse_status": "ok"}
+```
+
+**Expected:**
 ```json
 {
   "event_type": "info",
@@ -125,28 +149,30 @@ chạy 100+ request/lần) đã tiêu hết daily quota của API key trước k
 }
 ```
 
-*Không có tham số — `parse_status = "partial"` đúng. Kiểm tra không bịa thêm parameters.*
+⚠️ **Field không khớp:** `action`, `parse_status`
+
+**Nhận xét:**
+- `action`: "start_daily_report_job" vs "report_job_started" — đây là vấn đề **chủ quan của action naming**. Cả hai đều có nghĩa hợp lý; chỉ khác về convention (verb-first vs noun-first). Đây là underspecification của prompt.
+- `parse_status`: Model trả về "ok" thay vì "partial" — model lập luận rằng message đủ để xác định event_type + action nên là "ok". Định nghĩa "partial" trong prompt cần rõ hơn: ví dụ "partial = có action/event_type nhưng thiếu parameters để chẩn đoán đầy đủ".
 
 ---
 
-## Câu 3 — Đánh Giá Trên Data Thật
+## Tổng Kết Phân Tích
 
-Script đo metrics đã hoàn thiện trong `run_task_b_eval.py` với các tiêu chí:
+### Các điểm prompt cần cải thiện (dựa trên kết quả thực tế)
 
-| Tiêu chí | Cách đo | Ngưỡng kỳ vọng |
+| Vấn đề | Tần suất | Cải thiện đề xuất |
 |:---|:---|:---|
-| JSON Validity Rate | `json.loads()` thành công | ≥ 98% |
-| Schema Compliance | Đủ 6 field đúng kiểu | ≥ 95% |
-| Hallucination Rate | `check_hallucination()` flag | ≤ 2% |
-| parse_status Accuracy | So với 30-dòng human-label | ≥ 0.85 F1 |
+| `error_code` bị rút gọn (bỏ prefix "ERR") | TC-01, TC-04 | Thêm ví dụ: "Giữ nguyên toàn bộ error prefix: 'ERR ConnTimeout', không chỉ 'ConnTimeout'" |
+| `action` không nhất quán về độ dài/format | TC-01, TC-03, TC-04, TC-05 | Thêm ràng buộc: "2–4 từ, dùng past-participle hoặc noun phrase" |
+| `parameters` giá trị là integer thay vì string | TC-03 | Thêm ví dụ tường minh: `{"expected": "843"}` không phải `{"expected": 843}` |
+| `parse_status = "ok"` khi nên là "partial" | TC-05 | Làm rõ: "'partial' = đủ event_type+action nhưng KHÔNG có parameters" |
+| Hallucination checker có false-negative | TC-01, TC-04 | Nâng cấp: kiểm tra `key=value` pattern thay vì chỉ kiểm tra value |
 
-**Không thể chạy thực tế do quota hết.** Kết quả sẽ được bổ sung khi quota reset (thường 24h với free tier).
+### Điểm đáng ghi nhận
 
----
-
-## Bài Học Kỹ Thuật
-
-1. **Model versioning:** Các model mới (gemini-2.5+) đã migrate sang Interactions API — cần kiểm tra endpoint tương thích trước khi hardcode model name.
-2. **Quota management trong debug:** Nên chạy test với 1–2 request trước khi scale lên 100+ để không lãng phí quota.
-3. **Prompt language:** English prompt cho JSON output ít bị lỗi `//` comment hơn prompt tiếng Việt có ký tự đặc biệt trong schema description.
-4. **JSON extraction:** Regex `{[\s\S]+}` để extract JSON block từ free-text response ổn định hơn strip markdown fence đơn thuần.
+- **TC-02 PASS hoàn toàn** — đặc biệt là `component = null` chứng minh quy tắc
+  "không suy diễn từ context ngoài" hoạt động.
+- **Không có HALLUCINATION flag** — giá trị được điền đều có thể trace ngược về
+  message text, dù checker có false-negative với inferred keys.
+- **JSON format**: Tất cả 5 output đều là valid JSON, `json.loads()` thành công 100%.

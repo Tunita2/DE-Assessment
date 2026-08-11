@@ -233,88 +233,49 @@ Mọi record có `flags != []` đều được đưa vào hàng đợi human rev
 
 ---
 
-## 4. Kết Quả Chạy Thử (Bonus — 5 Test Case)
+## 4. Kết Quả Chạy Thực Tế (Bonus — 5 Test Case)
 
-> **Công cụ:** Claude Sonnet 4.5 · **Temperature:** 0
+> **Công cụ:** claude-sonnet-4-6 (TechOpenClaw proxy, OpenAI-compatible API)
+> **Temperature:** 0 · **Script:** `scratch/run_5tc_claude.py`
+> **Kết quả:** 1/5 ✅ PASS · 4/5 🔶 PARTIAL · 0/5 🚨 HALLUCINATION
 
-### TC-01 Output thực tế:
-```json
-{
-  "event_type": "error",
-  "error_code": "ERR ConnTimeout",
-  "component": "db-primary",
-  "action": "connection_timeout",
-  "parameters": {"retry": "3"},
-  "parse_status": "ok"
-}
-```
-✅ **Khớp hoàn toàn** với kỳ vọng.
+Chi tiết đầy đủ: [`task_b_eval_results.md`](task_b_eval_results.md)
 
----
+### Tóm tắt
 
-### TC-02 Output thực tế:
-```json
-{
-  "event_type": "info",
-  "error_code": null,
-  "component": null,
-  "action": "payment_processed",
-  "parameters": {"txn": "t419149", "amount": "990000"},
-  "parse_status": "ok"
-}
-```
-✅ **Đúng.** `component = null` — mô hình không tự suy diễn "payment-api" từ
-context ngoài message. Quy tắc chống hallucination hoạt động.
+| TC | Input | Verdict | Mismatch chính |
+|:---:|:---|:---:|:---|
+| TC-01 | `ERR ConnTimeout db-primary after 30s retry=3` | 🔶 PARTIAL | `error_code` bị rút gọn ("ConnTimeout" thay vì "ERR ConnTimeout"), `action` quá ngắn |
+| TC-02 | `Payment processed txn=t419149 amount=990000` | ✅ PASS | — |
+| TC-03 | `Report row mismatch expected=843 got=759` | 🔶 PARTIAL | `event_type = "error"` thay vì `"warning"`, parameter values là integer thay vì string |
+| TC-04 | `ERR HTTP 502 upstream=payment-api path=/checkout` | 🔶 PARTIAL | `error_code = "502"` (bỏ "ERR HTTP"), thêm `protocol=HTTP` không phải key=value |
+| TC-05 | `Daily report job started` | 🔶 PARTIAL | `action` khác convention, `parse_status = "ok"` thay vì `"partial"` |
 
----
+### Phát hiện quan trọng từ kết quả thực tế
 
-### TC-03 Output thực tế:
-```json
-{
-  "event_type": "warning",
-  "error_code": null,
-  "component": null,
-  "action": "row_mismatch",
-  "parameters": {"expected": "843", "got": "759"},
-  "parse_status": "ok"
-}
-```
-✅ **Đúng.** Suy luận `warning` từ ngữ nghĩa "mismatch" mà không cần prefix WARN.
+**1. TC-02 PASS** xác nhận quy tắc chống hallucination hoạt động: `component = null`,
+model không suy diễn "payment-api" từ trường `service` bên ngoài message.
+
+**2. Underspecification của prompt** gây 4/5 PARTIAL:
+- `error_code`: Prompt không chỉ rõ giữ nguyên prefix "ERR" → model tự rút gọn.
+- `action`: Không quy định độ dài hay convention (verb-first vs noun-first).
+- `parameters` type: Mặc dù đã ghi "value luôn là string" nhưng model vẫn trả integer.
+- `parse_status = "partial"`: Định nghĩa chưa đủ cụ thể — model hiểu "partial" là "thiếu 1 field quan trọng" thay vì "thiếu parameters".
+
+**3. Hallucination checker có false-negative:** `timeout=30s` (TC-01) và `protocol=HTTP`
+(TC-04) được thêm vào parameters dù không phải dạng key=value trong message. Checker
+chỉ verify value xuất hiện trong text chứ không verify key=value pattern — cần nâng cấp.
+
+**4. JSON Validity Rate = 100%** — tất cả 5 response đều parse được bằng `json.loads()`.
 
 ---
 
-### TC-04 Output thực tế:
-```json
-{
-  "event_type": "error",
-  "error_code": "ERR HTTP 502",
-  "component": "payment-api",
-  "action": "http_upstream_error",
-  "parameters": {"upstream": "payment-api", "path": "/checkout"},
-  "parse_status": "ok"
-}
-```
-✅ **Đúng.** Xử lý được error_code 3-token, `component` và `upstream` cùng giá
-trị điền đúng chỗ, `path=/checkout` không gây lỗi JSON.
+**Prompt cần cải thiện:** Thêm ràng buộc tường minh về `error_code` format,
+`action` convention (2–4 từ, past-participle), type enforcement cho `parameters`,
+và ví dụ phân biệt `parse_status = "ok"` vs `"partial"`.
 
----
 
-### TC-05 Output thực tế:
-```json
-{
-  "event_type": "info",
-  "error_code": null,
-  "component": null,
-  "action": "report_job_started",
-  "parameters": {},
-  "parse_status": "partial"
-}
-```
-✅ **Đúng.** `parse_status = "partial"` trả đúng, không bịa parameters hay
-component. Mô hình tự nhận biết message thiếu chi tiết.
 
----
 
-**Tổng kết: 5/5 ✅** — Prompt vượt qua tất cả test case kể cả ca khó (TC-04)
-và ca mơ hồ (TC-05). Điểm then chốt: cơ chế chống hallucination hoạt động đúng
-ở TC-02 (không suy diễn component từ context bên ngoài).
+
+
