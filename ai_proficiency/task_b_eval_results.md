@@ -167,7 +167,13 @@ bên ngoài message. Quy tắc chống hallucination hoạt động đúng ở T
 | `action` không nhất quán về độ dài/format | TC-01, TC-03, TC-04, TC-05 | Thêm ràng buộc: "2–4 từ, dùng past-participle hoặc noun phrase" |
 | `parameters` giá trị là integer thay vì string | TC-03 | Thêm ví dụ tường minh: `{"expected": "843"}` không phải `{"expected": 843}` |
 | `parse_status = "ok"` khi nên là "partial" | TC-05 | Làm rõ: "'partial' = đủ event_type+action nhưng KHÔNG có parameters" |
-| Hallucination checker có false-negative | TC-01, TC-04 | Nâng cấp: kiểm tra `key=value` pattern thay vì chỉ kiểm tra value |
+| Hallucination checker: false-negative | TC-01, TC-04 | Nâng cấp: kiểm tra `key=value` pattern, không chỉ value substring |
+| Hallucination checker: false-positive | Tiềm năng | Nếu model normalize format (`990000`→`990,000`), sẽ flag nhầm |
+
+> **Lưu ý về hallucination checker:** Đây là baseline đơn giản dùng substring match.
+> Flags là **tín hiệu gợi ý cho human review**, không phải bằng chứng chắc chắn.
+> False-negative: inferred keys (`timeout`, `protocol`) không bị bắt vì value vẫn có trong message.
+> False-positive: format normalization khác có thể bị flag nhầm. Luôn cần người xác nhận thủ công.
 
 ### Điểm đáng ghi nhận
 

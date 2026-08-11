@@ -130,6 +130,20 @@ VALID_PARSE_STATUS = {"ok", "partial", "unparseable"}
 
 # ── HALLUCINATION CHECKER ────────────────────────────────────────────────────
 def check_hallucination(message: str, output: dict) -> list:
+    """
+    Baseline hallucination checker — substring match only.
+
+    Known limitations:
+    - False negative: inferred keys are NOT caught if the VALUE still appears in message.
+      Example: model adds 'timeout=30s' from 'after 30s' — value "30s" is in message
+      so this passes, but key "timeout" was inferred, not from a key=value pair.
+    - False positive: if model normalises value format (e.g. '990000' -> '990,000',
+      or case mismatch 'payment-api' vs 'Payment-API'), this flags as hallucination
+      even though the information came from the message.
+
+    Flags from this function are signals for human review, NOT definitive proof of
+    hallucination. Always verify flagged records manually before drawing conclusions.
+    """
     flags = []
     for k, v in output.get("parameters", {}).items():
         if v and str(v) not in message:

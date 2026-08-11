@@ -199,11 +199,21 @@ Với mỗi record output, chạy kiểm tra ngược:
 
 ```python
 def check_hallucination(message: str, output: dict) -> list[str]:
-    """Trả về danh sách flag — nếu rỗng là không phát hiện hallucination."""
+    """
+    Baseline checker — substring match only.
+
+    Known limitations:
+    - False negative: inferred keys not caught if VALUE is in message
+      (e.g. model adds 'timeout=30s' from 'after 30s').
+    - False positive: if model normalises value format ('990000' -> '990,000')
+      or case ('payment-api' vs 'Payment-API'), will flag incorrectly.
+
+    Flags = signals for human review, NOT definitive proof of hallucination.
+    """
     flags = []
     # 1. Kiểm tra từng parameter: giá trị có xuất hiện trong message không?
     for k, v in output.get("parameters", {}).items():
-        if v and v not in message:
+        if v and str(v) not in message:
             flags.append(f"parameter '{k}={v}' not found in message")
     # 2. Component phải xuất hiện tường minh trong message text
     comp = output.get("component")
@@ -216,7 +226,9 @@ def check_hallucination(message: str, output: dict) -> list[str]:
     return flags
 ```
 
-Mọi record có `flags != []` đều được đưa vào hàng đợi human review.
+Mọi record có `flags != []` đều được đưa vào hàng đợi human review — nhưng cần xác
+nhận thủ công vì checker có thể báo nhầm (false positive) nếu model trả về format
+khác (số, casing). Không phải mọi flag đều là hallucination thật.
 
 ### 3.3 Khi nào cần người kiểm tra (Human-in-the-loop)
 
